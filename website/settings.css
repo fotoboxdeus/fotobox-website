@@ -186,6 +186,38 @@ input[type="url"]:focus {
   box-shadow: 0 0 10px rgba(230,57,70,0.2);
 }
 
+/* ─── Card Description ─── */
+.card-desc {
+  font-size: 0.82rem;
+  color: var(--dimmed);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+/* ─── CUPS Button ─── */
+.btn-cups {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.95rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-cups:active {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.25);
+}
+
 /* ─── Footer ─── */
 footer {
   text-align: center;

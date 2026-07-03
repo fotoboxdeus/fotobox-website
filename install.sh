@@ -44,6 +44,7 @@ apt-get install -y \
   printer-driver-gutenprint \
   avahi-daemon \
   nginx \
+  nginx-extras \
   git \
   chromium-browser \
   openbox \
@@ -64,14 +65,14 @@ apt-get install -y \
 # =============================================================================
 log "Konfiguriere CUPS..."
 
-# CUPS-Konfiguration: AirPrint / Netzwerkzugriff aktivieren
+# CUPS-Konfiguration: AirPrint + nginx-Proxy-Zugriff
 cat > /etc/cups/cupsd.conf << 'CUPSCONF'
 LogLevel warn
 MaxLogSize 0
 ErrorPolicy retry-job
 
-# Nur localhost und lokales Netz
-Listen localhost:631
+# Auf allen Interfaces hören (nginx proxied von außen)
+Listen 127.0.0.1:631
 Listen /run/cups/cups.sock
 
 # Freigegebene Drucker über Bonjour/AirPrint
@@ -81,11 +82,13 @@ DefaultAuthType Basic
 
 <Location />
   Order allow,deny
+  Allow 127.0.0.1
   Allow localhost
 </Location>
 
 <Location /admin>
   Order allow,deny
+  Allow 127.0.0.1
   Allow localhost
 </Location>
 
@@ -93,6 +96,7 @@ DefaultAuthType Basic
   AuthType Default
   Require user @SYSTEM
   Order allow,deny
+  Allow 127.0.0.1
   Allow localhost
 </Location>
 
@@ -274,6 +278,24 @@ server {
         proxy_set_header   X-Real-IP \$remote_addr;
         proxy_read_timeout 10s;
         proxy_connect_timeout 5s;
+    }
+
+    # CUPS Druckverwaltung → eingebettet erreichbar von allen Geräten
+    location /cups/ {
+        proxy_pass         http://127.0.0.1:631/;
+        proxy_set_header   Host             localhost;
+        proxy_set_header   X-Real-IP        \$remote_addr;
+        proxy_set_header   X-Forwarded-For  \$proxy_add_x_forwarded_for;
+        proxy_set_header   Authorization    \$http_authorization;
+        proxy_pass_header  Authorization;
+        proxy_redirect     http://localhost:631/ /cups/;
+        proxy_redirect     http://127.0.0.1:631/ /cups/;
+        proxy_read_timeout 30s;
+        # Absolute URLs in Antworten umschreiben
+        sub_filter         'http://localhost:631/' '/cups/';
+        sub_filter         'action="/'           'action="/cups/';
+        sub_filter_once    off;
+        sub_filter_types   text/html text/css application/javascript;
     }
 
     location / {
