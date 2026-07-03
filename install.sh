@@ -22,7 +22,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 KIOSK_USER="${SUDO_USER:-fotobox}"
-WEBROOT="/var/www/fotobox"
+REPO_DIR="/opt/fotobox-repo"          # Komplettes Git-Repo
+WEBROOT="/var/www/fotobox"            # Nur der website/-Inhalt
 GITHUB_REPO="https://github.com/fotoboxdeus/fotobox-website.git"
 SITE_URL="http://localhost"
 
@@ -55,7 +56,8 @@ apt-get install -y \
   xserver-xorg-input-libinput \
   xinput \
   libinput-tools \
-  usbutils
+  usbutils \
+  rsync
 
 # =============================================================================
 # 2. CUPS – Installation & Konfiguration
@@ -311,50 +313,17 @@ systemctl restart nginx
 # =============================================================================
 log "Klone Website von GitHub: $GITHUB_REPO"
 
-if [[ -d "$WEBROOT/.git" ]]; then
+if [[ -d "$REPO_DIR/.git" ]]; then
   log "Repository existiert bereits, führe git pull aus..."
-  git -C "$WEBROOT" pull --ff-only
+  git -C "$REPO_DIR" pull --ff-only
 else
-  # Webroot leeren und frisch klonen
-  rm -rf "$WEBROOT"
-  git clone "$GITHUB_REPO" "$WEBROOT" || {
-    warn "GitHub-Repo konnte nicht geklont werden."
-    warn "Erstelle Platzhalter-Website..."
-    mkdir -p "$WEBROOT"
-    cat > "$WEBROOT/index.html" << 'HTML'
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fotobox</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #1a1a2e;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      font-family: 'Segoe UI', sans-serif;
-      color: #eee;
-      overflow: hidden;
-    }
-    .container { text-align: center; }
-    h1 { font-size: 4rem; letter-spacing: 0.2em; margin-bottom: 1rem; }
-    p  { font-size: 1.2rem; opacity: 0.7; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>📸 FOTOBOX</h1>
-    <p>Bereit zum Fotografieren</p>
-  </div>
-</body>
-</html>
-HTML
-  }
+  rm -rf "$REPO_DIR"
+  git clone "$GITHUB_REPO" "$REPO_DIR" || error "GitHub-Repo konnte nicht geklont werden."
 fi
+
+# Nur den website/-Unterordner in den Webroot synchronisieren
+mkdir -p "$WEBROOT"
+rsync -a --delete "$REPO_DIR/website/" "$WEBROOT/"
 
 chown -R www-data:www-data "$WEBROOT"
 
@@ -365,13 +334,13 @@ log "Konfiguriere Fotobox-Settings-API..."
 
 mkdir -p /opt/fotobox
 
-# Python-API aus Webroot kopieren
-if [[ -f "$WEBROOT/api/server.py" ]]; then
-  cp "$WEBROOT/api/server.py" /opt/fotobox/api.py
+# Python-API aus Repo kopieren
+if [[ -f "$REPO_DIR/website/api/server.py" ]]; then
+  cp "$REPO_DIR/website/api/server.py" /opt/fotobox/api.py
   chmod 755 /opt/fotobox/api.py
   log "  API-Server nach /opt/fotobox/api.py kopiert."
 else
-  error "api/server.py nicht im geklonten Repo gefunden."
+  error "website/api/server.py nicht im geklonten Repo gefunden ($REPO_DIR)."
 fi
 
 # Standard-Settings anlegen (falls nicht vorhanden)
@@ -422,9 +391,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/git -C /var/www/fotobox pull --ff-only
+ExecStart=/usr/bin/git -C /opt/fotobox-repo pull --ff-only
+ExecStartPost=/usr/bin/rsync -a --delete /opt/fotobox-repo/website/ /var/www/fotobox/
 ExecStartPost=/bin/chown -R www-data:www-data /var/www/fotobox
-ExecStartPost=/bin/cp /var/www/fotobox/api/server.py /opt/fotobox/api.py
+ExecStartPost=/bin/cp /opt/fotobox-repo/website/api/server.py /opt/fotobox/api.py
 ExecStartPost=/bin/systemctl restart fotobox-api
 User=root
 SVC
