@@ -528,84 +528,145 @@ systemctl daemon-reload
 log "  Bildschirmschoner und Standby deaktiviert."
 
 # =============================================================================
-# 9. CHROMIUM KIOSK – SYSTEMD-SERVICE
+# 9. CHROMIUM KIOSK – SYSTEMD USER SERVICE
 # =============================================================================
 log "Konfiguriere Chromium-Kiosk-Modus..."
 
-# Xauthority-Pfad für den Kiosk-Benutzer
 KIOSK_HOME=$(eval echo "~$KIOSK_USER")
 
-# Kiosk-Startskript
+# --- Chromium Profil-Verzeichnis vorbereiten ---
+CHROMIUM_PROFILE="$KIOSK_HOME/.config/chromium-kiosk"
+mkdir -p "$CHROMIUM_PROFILE"
+
+# Preferences vorschreiben: alle Popups + Benachrichtigungen deaktiviert
+cat > "$CHROMIUM_PROFILE/Default/Preferences" << 'PREF'
+{
+  "profile": { "exit_type": "Normal", "exited_cleanly": true },
+  "browser": { "check_default_browser": false },
+  "session": { "restore_on_startup": 4, "startup_urls": [] },
+  "translate_blocked_languages": ["de"],
+  "translate_site_blacklist": [],
+  "translate": { "enabled": false },
+  "notifications": { "default_content_setting": 2 }
+}
+PREF
+mkdir -p "$CHROMIUM_PROFILE/Default"
+chown -R "$KIOSK_USER:$KIOSK_USER" "$CHROMIUM_PROFILE"
+
+# --- Kiosk-Startskript ---
 cat > /usr/local/bin/fotobox-kiosk.sh << KIOSK
 #!/bin/bash
-# Warte bis X-Server verfügbar ist
-for i in \$(seq 1 30); do
-  if xdpyinfo -display :0 &>/dev/null 2>&1; then break; fi
+# Warte bis GNOME-Session vollständig bereit ist
+for i in \$(seq 1 60); do
+  if pgrep -u "$KIOSK_USER" gnome-shell &>/dev/null; then break; fi
   sleep 1
 done
+sleep 3
 
+# DISPLAY + DBUS aus laufender GNOME-Session holen
 export DISPLAY=:0
-export XAUTHORITY="$KIOSK_HOME/.Xauthority"
+export XAUTHORITY="\$(ls /run/user/\$(id -u $KIOSK_USER)/gdm/Xauthority 2>/dev/null || echo $KIOSK_HOME/.Xauthority)"
 
-# DBUS-Adresse speichern (für gsettings aus anderen Scripts)
-dbus-send --session --dest=org.freedesktop.DBus \
-  --type=method_call / org.freedesktop.DBus.Peer.Ping 2>/dev/null && \
-  echo "\$DBUS_SESSION_BUS_ADDRESS" > /tmp/fotobox_dbus_addr 2>/dev/null || true
+# DBUS_SESSION_BUS_ADDRESS aus laufender Session lesen
+DBUS_ADDR=\$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/\$(pgrep -u "$KIOSK_USER" gnome-shell | head -1)/environ 2>/dev/null | tr -d '\0' | sed 's/DBUS_SESSION_BUS_ADDRESS=//')
+if [[ -n "\$DBUS_ADDR" ]]; then
+  export DBUS_SESSION_BUS_ADDRESS="\$DBUS_ADDR"
+  echo "\$DBUS_ADDR" > /tmp/fotobox_dbus_addr
+fi
 
-# Display-Standby und Bildschirmschoner deaktivieren
-xset s off
-xset s noblank
-xset -dpms
-/usr/local/bin/fotobox-display-settings.sh &
+# Display dauerhaft an lassen
+xset s off      2>/dev/null || true
+xset s noblank  2>/dev/null || true
+xset -dpms      2>/dev/null || true
 
 # Mauszeiger ausblenden
-unclutter -idle 1 -root &
+unclutter -idle 2 -root &
 
-# Chromium im Kiosk-Modus starten
+# Alte Chromium-Instanzen beenden
+pkill -u "$KIOSK_USER" chromium 2>/dev/null || true
+sleep 1
+
+# Chromium starten – vollständiger Kiosk ohne jede UI
 exec chromium-browser \
   --kiosk \
+  --app="$SITE_URL" \
+  --user-data-dir="$CHROMIUM_PROFILE" \
+  --no-first-run \
   --noerrdialogs \
   --disable-infobars \
-  --no-first-run \
   --disable-translate \
-  --disable-features=TranslateUI \
+  --disable-features=TranslateUI,OverscrollHistoryNavigation,OptimizationHints \
   --disable-component-update \
   --disable-background-networking \
-  --check-for-update-interval=31536000 \
+  --disable-sync \
+  --disable-extensions \
+  --disable-plugins \
+  --disable-default-apps \
+  --disable-hang-monitor \
+  --disable-prompt-on-repost \
+  --disable-notifications \
+  --disable-popup-blocking \
   --disable-session-crashed-bubble \
   --disable-restore-session-state \
+  --disable-save-password-bubble \
+  --disable-single-click-autofill \
+  --password-store=basic \
+  --use-mock-keychain \
+  --check-for-update-interval=31536000 \
   --autoplay-policy=no-user-gesture-required \
-  --start-fullscreen \
-  "$SITE_URL"
+  --overscroll-history-navigation=0 \
+  --window-position=0,0 \
+  --start-fullscreen
 KIOSK
 
 chmod +x /usr/local/bin/fotobox-kiosk.sh
 
-# Systemd-Service für Chromium (startet nach GDM/GNOME)
-cat > /etc/systemd/system/fotobox-kiosk.service << SVC
+# --- Systemd USER Service (läuft in der GNOME-Session) ---
+SYSTEMD_USER_DIR="$KIOSK_HOME/.config/systemd/user"
+mkdir -p "$SYSTEMD_USER_DIR"
+
+cat > "$SYSTEMD_USER_DIR/fotobox-kiosk.service" << 'SVC'
 [Unit]
 Description=Fotobox Chromium Kiosk
-After=graphical.target network-online.target
-Wants=network-online.target
-Requires=graphical.target
+After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
-User=$KIOSK_USER
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=$KIOSK_HOME/.Xauthority
 ExecStartPre=/bin/sleep 5
 ExecStart=/usr/local/bin/fotobox-kiosk.sh
 Restart=always
 RestartSec=5
 KillMode=process
+Environment=DISPLAY=:0
 
 [Install]
-WantedBy=graphical.target
+WantedBy=graphical-session.target
 SVC
 
-systemctl daemon-reload
-systemctl enable fotobox-kiosk.service
+chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config/systemd"
+
+# User-Service aktivieren
+loginctl enable-linger "$KIOSK_USER" 2>/dev/null || true
+su -l "$KIOSK_USER" -c "systemctl --user daemon-reload" 2>/dev/null || true
+su -l "$KIOSK_USER" -c "systemctl --user enable fotobox-kiosk.service" 2>/dev/null || true
+
+# Zusätzlich: XDG-Autostart als Fallback (startet sicher nach GNOME-Session)
+AUTOSTART_KIOSK="$KIOSK_HOME/.config/autostart/fotobox-kiosk.desktop"
+mkdir -p "$(dirname "$AUTOSTART_KIOSK")"
+cat > "$AUTOSTART_KIOSK" << DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Fotobox Kiosk
+Exec=/usr/local/bin/fotobox-kiosk.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
+DESKTOP
+chown "$KIOSK_USER:$KIOSK_USER" "$AUTOSTART_KIOSK"
+
+log "  Chromium-Kiosk-Service eingerichtet (User-Service + XDG-Autostart)."
 
 # =============================================================================
 # 10. WATCHDOG – Alle Dienste überwachen
@@ -667,38 +728,16 @@ CONF
 systemctl daemon-reload
 
 # =============================================================================
-# 11. AUTOSTART IM GNOME-MODUS (als Fallback für GNOME-Session)
+# 11. AUTOMATISCHE ANMELDUNG IN GDM (GNOME)
 # =============================================================================
-log "Konfiguriere GNOME-Autostart für Chromium-Kiosk..."
-
-AUTOSTART_DIR="$KIOSK_HOME/.config/autostart"
-mkdir -p "$AUTOSTART_DIR"
-chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config" 2>/dev/null || true
-
-cat > "$AUTOSTART_DIR/fotobox-kiosk.desktop" << DESKTOP
-[Desktop Entry]
-Type=Application
-Name=Fotobox Kiosk
-Exec=/usr/local/bin/fotobox-kiosk.sh
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-X-GNOME-Autostart-Delay=5
-DESKTOP
-
-chown "$KIOSK_USER:$KIOSK_USER" "$AUTOSTART_DIR/fotobox-kiosk.desktop"
-
-# Automatische Anmeldung in GDM konfigurieren
 log "Konfiguriere automatische GNOME-Anmeldung für $KIOSK_USER..."
 
 GDM_CONF="/etc/gdm3/custom.conf"
 if [[ -f "$GDM_CONF" ]]; then
-  # Automatische Anmeldung setzen
   sed -i '/^\[daemon\]/,/^\[/{
     /AutomaticLoginEnable/d
     /AutomaticLogin=/d
   }' "$GDM_CONF"
-
   sed -i '/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin='"$KIOSK_USER" "$GDM_CONF"
   log "  Automatische Anmeldung aktiviert für: $KIOSK_USER"
 else
