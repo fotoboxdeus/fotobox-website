@@ -566,6 +566,7 @@ CHROMIUM_PROFILE="$KIOSK_HOME/.config/chromium-kiosk"
 mkdir -p "$CHROMIUM_PROFILE"
 
 # Preferences vorschreiben: alle Popups + Benachrichtigungen deaktiviert
+mkdir -p "$CHROMIUM_PROFILE/Default"
 cat > "$CHROMIUM_PROFILE/Default/Preferences" << 'PREF'
 {
   "profile": { "exit_type": "Normal", "exited_cleanly": true },
