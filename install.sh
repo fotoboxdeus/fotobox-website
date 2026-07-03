@@ -138,8 +138,14 @@ CUPSCONF
 usermod -aG lpadmin "$KIOSK_USER" 2>/dev/null || true
 
 # CUPS starten
+# cups.socket  = Socket-Aktivierung (Ubuntu-Standard)
+# cups-browsed = Drucker-Bekanntmachung im Netz
+systemctl enable cups.socket
 systemctl enable cups
+systemctl enable cups-browsed 2>/dev/null || true
+systemctl restart cups.socket
 systemctl restart cups
+systemctl restart cups-browsed 2>/dev/null || true
 sleep 2
 
 # =============================================================================
@@ -606,17 +612,37 @@ systemctl enable fotobox-kiosk.service
 # =============================================================================
 log "Konfiguriere systemd-Watchdog für alle Dienste..."
 
-# nginx Watchdog
+# nginx Watchdog + Abhängigkeit von fotobox-api
 mkdir -p /etc/systemd/system/nginx.service.d
 cat > /etc/systemd/system/nginx.service.d/restart.conf << 'CONF'
+[Unit]
+After=fotobox-api.service
+Wants=fotobox-api.service
+
 [Service]
 Restart=always
 RestartSec=5
 CONF
 
-# CUPS Watchdog
+# CUPS Watchdog (cups.socket + cups.service)
 mkdir -p /etc/systemd/system/cups.service.d
 cat > /etc/systemd/system/cups.service.d/restart.conf << 'CONF'
+[Service]
+Restart=always
+RestartSec=5
+CONF
+
+mkdir -p /etc/systemd/system/cups.socket.d
+cat > /etc/systemd/system/cups.socket.d/restart.conf << 'CONF'
+[Unit]
+After=network.target
+
+[Socket]
+SocketMode=0666
+CONF
+
+mkdir -p /etc/systemd/system/cups-browsed.service.d
+cat > /etc/systemd/system/cups-browsed.service.d/restart.conf << 'CONF'
 [Service]
 Restart=always
 RestartSec=5
@@ -704,12 +730,15 @@ log " 3. GitHub-Repo 'fotoboxdeus/fotobox-website' erstellen"
 log "    (Skript: ./create_github_repo.sh)"
 log " 4. System neu starten: sudo reboot"
 log ""
-log " Service-Status prüfen:"
-log "   sudo systemctl status cups"
-log "   sudo systemctl status nginx"
-log "   sudo systemctl status fotobox-api"
-log "   sudo systemctl status fotobox-kiosk"
-log "   sudo systemctl status fotobox-update.timer"
+log " Services (alle auf Restart=always + Autostart):"
+log "   cups.socket      → CUPS Socket-Aktivierung"
+log "   cups             → Druckdienst"
+log "   cups-browsed     → AirPrint-Bekanntmachung"
+log "   avahi-daemon     → Bonjour/mDNS"
+log "   fotobox-api      → Settings-API (Port 3000)"
+log "   nginx            → Webserver (startet nach API)"
+log "   fotobox-update   → Auto-Update von GitHub (stündlich)"
+log "   fotobox-kiosk    → Chromium Vollbild"
 log ""
 log " Remote-Einstellungen (Handy im selben WLAN):"
 log "   http://[IP-der-Fotobox]/settings"
