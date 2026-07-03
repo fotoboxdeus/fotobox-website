@@ -122,19 +122,20 @@ setInterval(async () => {
 async function init() {
   await fetchSettings();
 
-  // Video-Verfügbarkeit prüfen bevor wir starten
-  // canplay-Event feuert → showVideo(); error-Event feuert → showGallery() (im error-Handler oben)
-  if (bgVideo.readyState >= 3) {
-    // Video bereits geladen (z.B. gecacht)
-    showVideo();
+  // Video-Datei per HEAD-Request prüfen bevor irgendwas gerendert wird
+  let videoExists = false;
+  try {
+    const res = await fetch('video/loop.mp4', { method: 'HEAD' });
+    videoExists = res.ok;
+  } catch { videoExists = false; }
+
+  if (!videoExists) {
+    // Kein Video → Video-Layer sofort verstecken, direkt Galerie
+    videoAvailable = false;
+    layerVideo.style.display = 'none';
+    showGallery();
   } else {
-    // Auf canplay oder error warten
-    bgVideo.addEventListener('canplay', showVideo, { once: true });
-    // Timeout: Falls weder canplay noch error kommt (z.B. no src), nach 3s Galerie starten
-    setTimeout(() => {
-      if (currentMode === 'video' && !videoAvailable) return; // error-Handler hat schon übernommen
-      if (currentMode === 'video') showVideo();
-    }, 3000);
+    showVideo();
   }
 
   // Vollbild beim ersten Touch
