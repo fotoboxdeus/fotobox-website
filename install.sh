@@ -530,6 +530,7 @@ DDESK
 chown -R "${KIOSK_USER}:${KIOSK_USER}" "$AUTOSTART_DIR_DISPLAY"
 
 # systemd logind: kein Suspend/Hibernate
+mkdir -p /etc/systemd/sleep.conf.d
 cat > /etc/systemd/sleep.conf.d/fotobox.conf << 'SLEEP'
 [Sleep]
 AllowSuspend=no
