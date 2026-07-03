@@ -349,6 +349,9 @@ else
   git clone "$GITHUB_REPO" "$REPO_DIR" || error "GitHub-Repo konnte nicht geklont werden."
 fi
 
+# Ownership-Warnung dauerhaft unterdrücken
+git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+
 # Nur den website/-Unterordner in den Webroot synchronisieren
 mkdir -p "$WEBROOT"
 rsync -a --delete "$REPO_DIR/website/" "$WEBROOT/"
@@ -419,6 +422,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=/usr/bin/git config --global --add safe.directory /opt/fotobox-repo
 ExecStart=/usr/bin/git -C /opt/fotobox-repo pull --ff-only
 ExecStartPost=/usr/bin/rsync -a --delete /opt/fotobox-repo/website/ /var/www/fotobox/
 ExecStartPost=/bin/chown -R www-data:www-data /var/www/fotobox
