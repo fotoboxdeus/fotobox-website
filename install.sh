@@ -411,7 +411,7 @@ Description=Fotobox Website stündlich aktualisieren
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=1h
+OnUnitActiveSec=5min
 Persistent=true
 
 [Install]
