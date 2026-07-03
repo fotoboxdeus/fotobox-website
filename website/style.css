@@ -1,0 +1,130 @@
+/* === Reset & Basis === */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg:      #0d0d1a;
+  --accent:  #e63946;
+  --text:    #f1faee;
+  --dimmed:  rgba(241,250,238,0.6);
+  --card:    rgba(255,255,255,0.05);
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  user-select: none;
+  cursor: none; /* Kiosk: kein Mauszeiger */
+}
+
+/* === Screens === */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  transition: opacity 0.4s ease;
+}
+
+.screen.hidden {
+  display: none;
+}
+
+/* === Startscreen === */
+.logo {
+  font-size: 6rem;
+  line-height: 1;
+}
+
+h1 {
+  font-size: 5rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+h2 {
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 1.4rem;
+  color: var(--dimmed);
+  letter-spacing: 0.1em;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1;   }
+}
+
+/* === Button === */
+.btn-start {
+  padding: 1.2rem 4rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 0 40px rgba(230,57,70,0.5);
+}
+
+.btn-start:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 20px rgba(230,57,70,0.3);
+}
+
+/* === Countdown === */
+.countdown {
+  font-size: 14rem;
+  font-weight: 900;
+  color: var(--accent);
+  animation: pop 0.5s ease;
+}
+
+@keyframes pop {
+  0%   { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* === Blitz-Effekt === */
+.flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.05s;
+  z-index: 999;
+}
+
+.flash.active {
+  opacity: 1;
+}
+
+.big-text {
+  font-size: 4rem;
+  font-weight: 700;
+}
+
+/* === Done Screen === */
+#screen-done p {
+  font-size: 1.5rem;
+  color: var(--dimmed);
+}
