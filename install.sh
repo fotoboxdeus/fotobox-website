@@ -136,43 +136,23 @@ systemctl restart cups
 sleep 2
 
 # =============================================================================
-# 3. DNP RX1HS PPD-DATEI ERMITTELN
+# 3. DNP RX1HS PPD-DATEI INSTALLIEREN
 # =============================================================================
-log "Suche DNP RX1HS PPD-Datei..."
+log "Installiere DNP RX1HS PPD-Datei..."
 
-# Gutenprint liefert DNP-Treiber. Dateiname je nach Version:
-PPD_BASE="/usr/share/cups/model"
-DNP_PPD=""
+# PPD liegt im selben Verzeichnis wie dieses Skript
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_PPD="$SCRIPT_DIR/DNP.ppd"
+DNP_PPD="/usr/share/cups/model/DNP_RX1HS.ppd"
+USE_GUTENPRINT_URI=0
 
-# Suche nach passender PPD (Gutenprint oder separat installiert)
-for candidate in \
-  "$(find /usr/share -name '*dnp*rx1*' -iname '*.ppd*' 2>/dev/null | head -1)" \
-  "$(find /usr/share -name '*DNP*' -iname '*.ppd*' 2>/dev/null | head -1)"; do
-  if [[ -n "$candidate" ]]; then
-    DNP_PPD="$candidate"
-    break
-  fi
-done
-
-if [[ -z "$DNP_PPD" ]]; then
-  warn "DNP RX1HS PPD nicht gefunden. Lade Gutenprint-PPD-Paket nach..."
-  apt-get install -y printer-driver-gutenprint cups-filters
-  # Gutenprint PPDs neu generieren
-  cups-genppdupdate 2>/dev/null || true
-  sleep 2
-  DNP_PPD="$(find /usr/share/cups/model -name '*dnp*' -iname '*.ppd*' 2>/dev/null | head -1)"
+if [[ ! -f "$SRC_PPD" ]]; then
+  error "DNP.ppd nicht gefunden in $SCRIPT_DIR – bitte sicherstellen, dass die Datei neben install.sh liegt."
 fi
 
-if [[ -z "$DNP_PPD" ]]; then
-  warn "Kein DNP PPD via Gutenprint gefunden. Verwende generischen Gutenprint-Treiber."
-  warn "→ Bitte DNP RX1HS PPD manuell unter /usr/share/cups/model/DNP_RX1HS.ppd ablegen"
-  warn "→ PPD-Download: https://www.dnpphoto.eu/drivers"
-  DNP_PPD="gutenprint:stp-dnp-rx1.5.3"  # Gutenprint URI-Fallback
-  USE_GUTENPRINT_URI=1
-else
-  USE_GUTENPRINT_URI=0
-  log "PPD gefunden: $DNP_PPD"
-fi
+cp "$SRC_PPD" "$DNP_PPD"
+chmod 644 "$DNP_PPD"
+log "PPD installiert nach: $DNP_PPD"
 
 # =============================================================================
 # 4. DRUCKER ANLEGEN (DNP RX1HS – 4 Warteschlangen)
@@ -192,28 +172,15 @@ add_printer() {
   # Drucker entfernen falls vorhanden
   lpadmin -x "$NAME" 2>/dev/null || true
 
-  if [[ $USE_GUTENPRINT_URI -eq 1 ]]; then
-    # Gutenprint-Treiber URI
-    lpadmin \
-      -p "$NAME" \
-      -D "$DESC" \
-      -L "Fotobox" \
-      -v "usb://DNP/RX1HS" \
-      -m "$DNP_PPD" \
-      -o PageSize="$MEDIA" \
-      -o StpFinish="$FINISH" \
-      -E
-  else
-    lpadmin \
-      -p "$NAME" \
-      -D "$DESC" \
-      -L "Fotobox" \
-      -v "usb://DNP/RX1HS" \
-      -P "$DNP_PPD" \
-      -o PageSize="$MEDIA" \
-      -o StpFinish="$FINISH" \
-      -E
-  fi
+  lpadmin \
+    -p "$NAME" \
+    -D "$DESC" \
+    -L "Fotobox" \
+    -v "usb://DNP/RX1HS" \
+    -P "$DNP_PPD" \
+    -o PageSize="$MEDIA" \
+    -o StpFinish="$FINISH" \
+    -E
 
   # Drucker als Standard freigeben & aktivieren
   cupsenable "$NAME"
