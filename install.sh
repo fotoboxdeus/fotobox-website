@@ -65,14 +65,14 @@ apt-get install -y \
 # =============================================================================
 log "Konfiguriere CUPS..."
 
-# CUPS-Konfiguration: AirPrint + nginx-Proxy-Zugriff
+# CUPS-Konfiguration: AirPrint + direkter LAN-Zugriff auf Port 631
 cat > /etc/cups/cupsd.conf << 'CUPSCONF'
 LogLevel warn
 MaxLogSize 0
 ErrorPolicy retry-job
 
-# Auf allen Interfaces hören (nginx proxied von außen)
-Listen 127.0.0.1:631
+# Auf allen Interfaces hören (lokal + LAN)
+Listen *:631
 Listen /run/cups/cups.sock
 
 # Freigegebene Drucker über Bonjour/AirPrint
@@ -82,22 +82,28 @@ DefaultAuthType Basic
 
 <Location />
   Order allow,deny
-  Allow 127.0.0.1
   Allow localhost
+  Allow 192.168.0.0/16
+  Allow 10.0.0.0/8
+  Allow 172.16.0.0/12
 </Location>
 
 <Location /admin>
   Order allow,deny
-  Allow 127.0.0.1
   Allow localhost
+  Allow 192.168.0.0/16
+  Allow 10.0.0.0/8
+  Allow 172.16.0.0/12
 </Location>
 
 <Location /admin/conf>
   AuthType Default
   Require user @SYSTEM
   Order allow,deny
-  Allow 127.0.0.1
   Allow localhost
+  Allow 192.168.0.0/16
+  Allow 10.0.0.0/8
+  Allow 172.16.0.0/12
 </Location>
 
 <Policy default>
@@ -278,24 +284,6 @@ server {
         proxy_set_header   X-Real-IP \$remote_addr;
         proxy_read_timeout 10s;
         proxy_connect_timeout 5s;
-    }
-
-    # CUPS Druckverwaltung → eingebettet erreichbar von allen Geräten
-    location /cups/ {
-        proxy_pass         http://127.0.0.1:631/;
-        proxy_set_header   Host             localhost;
-        proxy_set_header   X-Real-IP        \$remote_addr;
-        proxy_set_header   X-Forwarded-For  \$proxy_add_x_forwarded_for;
-        proxy_set_header   Authorization    \$http_authorization;
-        proxy_pass_header  Authorization;
-        proxy_redirect     http://localhost:631/ /cups/;
-        proxy_redirect     http://127.0.0.1:631/ /cups/;
-        proxy_read_timeout 30s;
-        # Absolute URLs in Antworten umschreiben
-        sub_filter         'http://localhost:631/' '/cups/';
-        sub_filter         'action="/'           'action="/cups/';
-        sub_filter_once    off;
-        sub_filter_types   text/html text/css application/javascript;
     }
 
     location / {

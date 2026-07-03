@@ -218,6 +218,14 @@ input[type="url"]:focus {
   border-color: rgba(255,255,255,0.25);
 }
 
+.cups-hint {
+  font-size: 0.75rem;
+  color: var(--dimmed);
+  text-align: center;
+  margin-top: 0.6rem;
+  word-break: break-all;
+}
+
 /* ─── Footer ─── */
 footer {
   text-align: center;

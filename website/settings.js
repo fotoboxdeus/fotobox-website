@@ -92,17 +92,23 @@ function updateCountdown() {
 
 // ─── Gerät-IP anzeigen ───────────────────────────────────────
 async function loadInfo() {
+  let ip = window.location.hostname;
   try {
     const res = await fetch('/api/info');
     if (res.ok) {
       const d = await res.json();
-      deviceUrl.textContent = `http://${d.ip}/settings`;
-    } else {
-      throw new Error();
+      ip = d.ip;
     }
-  } catch {
-    deviceUrl.textContent = `http://${window.location.hostname}/settings`;
-  }
+  } catch {}
+
+  deviceUrl.textContent = `http://${ip}/settings`;
+
+  // CUPS-Button direkt auf Port 631 zeigen
+  const cupsBtn  = document.getElementById('btn-cups');
+  const cupsHint = document.getElementById('cups-hint');
+  const cupsUrl  = `http://${ip}:631`;
+  cupsBtn.href   = cupsUrl;
+  if (cupsHint) cupsHint.textContent = cupsUrl;
 }
 
 // ─── Speichern ───────────────────────────────────────────────
