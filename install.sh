@@ -50,7 +50,12 @@ apt-get install -y \
   unclutter \
   curl \
   wget \
-  jq
+  jq \
+  xserver-xorg-input-evdev \
+  xserver-xorg-input-libinput \
+  xinput \
+  libinput-tools \
+  usbutils
 
 # =============================================================================
 # 2. CUPS – Installation & Konfiguration
@@ -442,6 +447,111 @@ systemctl enable fotobox-update.timer
 systemctl start fotobox-update.timer
 
 # =============================================================================
+# 8b. BETRONICS TOUCHSCREEN – TREIBER & KALIBRIERUNG
+# =============================================================================
+log "Konfiguriere Betronics Touchscreen..."
+
+# Betronics Monitore nutzen einen USB-HID-Touchcontroller (meist eGalax oder ILITEK).
+# Unter Ubuntu funktioniert das über den generischen evdev/libinput-Stack.
+
+# udev-Regel: Touch-Gerät automatisch als Eingabegerät erkennen
+cat > /etc/udev/rules.d/99-betronics-touch.rules << 'UDEV'
+# Betronics Touchscreen (USB HID)
+SUBSYSTEM=="input", ATTRS{idVendor}=="0eef", ATTRS{idProduct}=="0001", ENV{ID_INPUT_TOUCHSCREEN}="1"
+SUBSYSTEM=="input", ATTRS{idVendor}=="222a", ENV{ID_INPUT_TOUCHSCREEN}="1"
+SUBSYSTEM=="input", ATTRS{idVendor}=="04d8", ENV{ID_INPUT_TOUCHSCREEN}="1"
+UDEV
+
+udevadm control --reload-rules
+udevadm trigger
+
+# libinput-Konfiguration: Touch als direkte Eingabe (nicht als Maus)
+mkdir -p /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/99-betronics-touch.conf << 'XORG'
+Section "InputClass"
+    Identifier   "Betronics Touchscreen"
+    MatchIsTouchscreen "on"
+    Driver       "libinput"
+    Option       "CalibrationMatrix" "1 0 0 0 1 0 0 0 1"
+    Option       "TransformationMatrix" "1 0 0 0 1 0 0 0 1"
+EndSection
+XORG
+
+log "  Touchscreen-Konfiguration gesetzt."
+log "  Touch-Gerät prüfen: xinput list"
+
+# =============================================================================
+# 8c. BILDSCHIRMSCHONER & ENERGIESPARMODUS DEAKTIVIEREN
+# =============================================================================
+log "Deaktiviere Bildschirmschoner und Display-Standby..."
+
+# GNOME: Bildschirmschoner + automatische Sperre komplett abschalten
+GNOME_SETTINGS_SCRIPT="/usr/local/bin/fotobox-display-settings.sh"
+cat > "$GNOME_SETTINGS_SCRIPT" << GSETTINGS
+#!/bin/bash
+export DISPLAY=:0
+export DBUS_SESSION_BUS_ADDRESS=\$(cat /tmp/fotobox_dbus_addr 2>/dev/null || echo "")
+
+# GNOME: Bildschirmschoner deaktivieren
+gsettings set org.gnome.desktop.screensaver lock-enabled false
+gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+gsettings set org.gnome.desktop.session idle-delay 0
+
+# GNOME Power: Kein Ausschalten bei Inaktivität
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+gsettings set org.gnome.settings-daemon.plugins.power power-button-action 'nothing'
+gsettings set org.gnome.settings-daemon.plugins.power idle-dim false
+
+# X11: DPMS und Blank ausschalten
+xset s off
+xset s noblank
+xset -dpms
+GSETTINGS
+
+chmod +x "$GNOME_SETTINGS_SCRIPT"
+
+# Autostart-Eintrag damit es nach jedem Login gilt
+AUTOSTART_DIR_DISPLAY="/home/${KIOSK_USER}/.config/autostart"
+mkdir -p "$AUTOSTART_DIR_DISPLAY"
+cat > "$AUTOSTART_DIR_DISPLAY/fotobox-display.desktop" << DDESK
+[Desktop Entry]
+Type=Application
+Name=Fotobox Display-Einstellungen
+Exec=/usr/local/bin/fotobox-display-settings.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3
+DDESK
+
+chown -R "${KIOSK_USER}:${KIOSK_USER}" "$AUTOSTART_DIR_DISPLAY"
+
+# systemd logind: kein Suspend/Hibernate
+cat > /etc/systemd/sleep.conf.d/fotobox.conf << 'SLEEP'
+[Sleep]
+AllowSuspend=no
+AllowHibernation=no
+AllowSuspendThenHibernate=no
+AllowHybridSleep=no
+SLEEP
+
+# logind: Lid-Taste und Power-Taste ignorieren
+mkdir -p /etc/systemd/logind.conf.d
+cat > /etc/systemd/logind.conf.d/fotobox.conf << 'LOGIND'
+[Login]
+HandlePowerKey=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+IdleAction=ignore
+LOGIND
+
+systemctl daemon-reload
+log "  Bildschirmschoner und Standby deaktiviert."
+
+# =============================================================================
 # 9. CHROMIUM KIOSK – SYSTEMD-SERVICE
 # =============================================================================
 log "Konfiguriere Chromium-Kiosk-Modus..."
@@ -460,6 +570,17 @@ done
 
 export DISPLAY=:0
 export XAUTHORITY="$KIOSK_HOME/.Xauthority"
+
+# DBUS-Adresse speichern (für gsettings aus anderen Scripts)
+dbus-send --session --dest=org.freedesktop.DBus \
+  --type=method_call / org.freedesktop.DBus.Peer.Ping 2>/dev/null && \
+  echo "\$DBUS_SESSION_BUS_ADDRESS" > /tmp/fotobox_dbus_addr 2>/dev/null || true
+
+# Display-Standby und Bildschirmschoner deaktivieren
+xset s off
+xset s noblank
+xset -dpms
+/usr/local/bin/fotobox-display-settings.sh &
 
 # Mauszeiger ausblenden
 unclutter -idle 1 -root &
