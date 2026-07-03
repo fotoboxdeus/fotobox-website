@@ -15,6 +15,7 @@ let settings     = { ...DEFAULT };
 let switchTimer  = null;
 let currentMode  = 'video';
 let modeStart    = Date.now();
+let videoAvailable = true;   // wird auf false gesetzt wenn loop.mp4 fehlt
 
 const layerVideo    = document.getElementById('layer-video');
 const layerGallery  = document.getElementById('layer-gallery');
@@ -24,11 +25,15 @@ const videoFallback = document.getElementById('video-fallback');
 
 // --- Video: Fallback wenn Datei fehlt ---
 bgVideo.addEventListener('error', () => {
+  videoAvailable = false;
   bgVideo.style.display = 'none';
   videoFallback.classList.add('visible');
+  // Sofort zur Galerie wechseln und dort bleiben
+  showGallery();
 });
 
 bgVideo.addEventListener('canplay', () => {
+  videoAvailable = true;
   videoFallback.classList.remove('visible');
   bgVideo.style.display = 'block';
 });
@@ -87,14 +92,16 @@ function showGallery() {
   currentMode = 'gallery';
   modeStart   = Date.now();
 
-  // Galerie vorladen, dann einblenden
   galleryFrame.src = settings.gallery_url;
 
   layerVideo.classList.add('fade-out');
   layerGallery.classList.add('fade-in');
 
   reportStatus();
-  switchTimer = setTimeout(showVideo, settings.gallery_duration * 1000);
+  // Nur zurück zu Video wenn Video verfügbar
+  if (videoAvailable) {
+    switchTimer = setTimeout(showVideo, settings.gallery_duration * 1000);
+  }
 }
 
 // --- Statusmeldung alle 10 Sek. ---
@@ -104,9 +111,9 @@ setInterval(reportStatus, 10000);
 setInterval(async () => {
   const snap = JSON.stringify(settings);
   await fetchSettings();
-  // Bei Änderung: Timer neu starten
   if (JSON.stringify(settings) !== snap) {
-    if (currentMode === 'video') showVideo();
+    // Bei Änderung: Timer neu starten – aber nur zu Video wenn verfügbar
+    if (currentMode === 'video' && videoAvailable) showVideo();
     else showGallery();
   }
 }, 30000);
@@ -114,7 +121,21 @@ setInterval(async () => {
 // --- Init ---
 async function init() {
   await fetchSettings();
-  showVideo();
+
+  // Video-Verfügbarkeit prüfen bevor wir starten
+  // canplay-Event feuert → showVideo(); error-Event feuert → showGallery() (im error-Handler oben)
+  if (bgVideo.readyState >= 3) {
+    // Video bereits geladen (z.B. gecacht)
+    showVideo();
+  } else {
+    // Auf canplay oder error warten
+    bgVideo.addEventListener('canplay', showVideo, { once: true });
+    // Timeout: Falls weder canplay noch error kommt (z.B. no src), nach 3s Galerie starten
+    setTimeout(() => {
+      if (currentMode === 'video' && !videoAvailable) return; // error-Handler hat schon übernommen
+      if (currentMode === 'video') showVideo();
+    }, 3000);
+  }
 
   // Vollbild beim ersten Touch
   document.addEventListener('click', () => {
