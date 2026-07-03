@@ -1,0 +1,12 @@
+Diesen Ordner bitte mit der Videodatei befüllen:
+
+  video/loop.mp4
+
+Anforderungen:
+- Format: MP4 (H.264)
+- Empfohlen: 1920×1080 oder höher
+- Dauer: beliebig (wird endlos geloopt)
+- Keine Tonspur nötig (Video läuft stumm)
+
+Das Video wird im Hintergrund des Kiosk-Bildschirms angezeigt.
+Solange keine Datei vorhanden ist, erscheint ein animierter Platzhalter.

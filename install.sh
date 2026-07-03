@@ -248,6 +248,21 @@ server {
 
     server_name localhost;
 
+    # Python-Quellcode nie ausliefern
+    location ~ \.py$ {
+        deny all;
+        return 404;
+    }
+
+    # Settings-API → Python-Backend
+    location /api/ {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_read_timeout 10s;
+        proxy_connect_timeout 5s;
+    }
+
     location / {
         try_files \$uri \$uri/ /index.html;
     }
@@ -258,8 +273,17 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Kein Cache für HTML
-    location ~* \.html$ {
+    # Video: längeres Caching, kein Range-Request-Problem
+    location ~* \.mp4$ {
+        expires 1d;
+        add_header Cache-Control "public";
+        mp4;
+        mp4_buffer_size     1m;
+        mp4_max_buffer_size 5m;
+    }
+
+    # Kein Cache für HTML und JSON
+    location ~* \.(html|json)$ {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
@@ -330,6 +354,57 @@ fi
 chown -R www-data:www-data "$WEBROOT"
 
 # =============================================================================
+# 7a. FOTOBOX SETTINGS API
+# =============================================================================
+log "Konfiguriere Fotobox-Settings-API..."
+
+mkdir -p /opt/fotobox
+
+# Python-API aus Webroot kopieren
+if [[ -f "$WEBROOT/api/server.py" ]]; then
+  cp "$WEBROOT/api/server.py" /opt/fotobox/api.py
+  chmod 755 /opt/fotobox/api.py
+  log "  API-Server nach /opt/fotobox/api.py kopiert."
+else
+  error "api/server.py nicht im geklonten Repo gefunden."
+fi
+
+# Standard-Settings anlegen (falls nicht vorhanden)
+if [[ ! -f "$WEBROOT/settings.json" ]]; then
+  cat > "$WEBROOT/settings.json" << 'JSON'
+{
+  "video_duration": 45,
+  "gallery_duration": 45,
+  "gallery_url": "https://fotoshare.co/e/MT9Ze_2AcJL-7hC1H4kJL"
+}
+JSON
+fi
+chown www-data:www-data "$WEBROOT/settings.json"
+
+# Systemd-Service für API
+cat > /etc/systemd/system/fotobox-api.service << 'SVC'
+[Unit]
+Description=Fotobox Settings API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+ExecStart=/usr/bin/python3 /opt/fotobox/api.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+SVC
+
+systemctl daemon-reload
+systemctl enable fotobox-api
+systemctl restart fotobox-api
+log "  Settings-API gestartet auf Port 3000."
+
+# =============================================================================
 # 8. AUTO-UPDATE SERVICE (Website von GitHub)
 # =============================================================================
 log "Erstelle Auto-Update-Service für Website..."
@@ -344,6 +419,8 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=/usr/bin/git -C /var/www/fotobox pull --ff-only
 ExecStartPost=/bin/chown -R www-data:www-data /var/www/fotobox
+ExecStartPost=/bin/cp /var/www/fotobox/api/server.py /opt/fotobox/api.py
+ExecStartPost=/bin/systemctl restart fotobox-api
 User=root
 SVC
 
@@ -462,6 +539,14 @@ Restart=always
 RestartSec=5
 CONF
 
+# Fotobox-API Watchdog
+mkdir -p /etc/systemd/system/fotobox-api.service.d
+cat > /etc/systemd/system/fotobox-api.service.d/restart.conf << 'CONF'
+[Service]
+Restart=always
+RestartSec=5
+CONF
+
 systemctl daemon-reload
 
 # =============================================================================
@@ -531,6 +616,10 @@ log ""
 log " Service-Status prüfen:"
 log "   sudo systemctl status cups"
 log "   sudo systemctl status nginx"
+log "   sudo systemctl status fotobox-api"
 log "   sudo systemctl status fotobox-kiosk"
 log "   sudo systemctl status fotobox-update.timer"
+log ""
+log " Remote-Einstellungen (Handy im selben WLAN):"
+log "   http://[IP-der-Fotobox]/settings"
 log "============================================================"

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fotobox Einstellungen</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="container">
+
+    <header>
+      <div class="logo">📸</div>
+      <h1>FOTOBOX</h1>
+      <p class="subtitle">Einstellungen</p>
+    </header>
+
+    <!-- Aktueller Status -->
+    <div class="card status-card">
+      <div class="status-dot" id="status-dot"></div>
+      <div class="status-info">
+        <span class="status-label">Aktiver Modus</span>
+        <span class="status-value" id="status-mode">Verbinde…</span>
+      </div>
+      <div class="status-next" id="status-next"></div>
+    </div>
+
+    <!-- Dauern -->
+    <div class="card">
+      <h2>Anzeigedauer</h2>
+
+      <div class="field">
+        <label for="inp-video">
+          🎬 Video
+          <span class="badge" id="badge-video">45 Sek.</span>
+        </label>
+        <input type="range" id="inp-video" min="5" max="300" step="5" value="45">
+        <div class="range-labels"><span>5 Sek.</span><span>5 Min.</span></div>
+      </div>
+
+      <div class="field">
+        <label for="inp-gallery">
+          🖼 Galerie
+          <span class="badge" id="badge-gallery">45 Sek.</span>
+        </label>
+        <input type="range" id="inp-gallery" min="5" max="300" step="5" value="45">
+        <div class="range-labels"><span>5 Sek.</span><span>5 Min.</span></div>
+      </div>
+    </div>
+
+    <!-- Galerie-URL -->
+    <div class="card">
+      <h2>Galerie-URL</h2>
+      <div class="field">
+        <input type="url" id="inp-url"
+          placeholder="https://…"
+          autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+    </div>
+
+    <button class="btn-save" id="btn-save" onclick="saveSettings()">
+      ✓ &nbsp;Speichern &amp; Anwenden
+    </button>
+
+    <footer>
+      <p>Fotobox erreichbar unter</p>
+      <p class="device-url" id="device-url">…</p>
+      <a href="/" class="open-kiosk" target="_blank">Kiosk öffnen ↗</a>
+    </footer>
+
+  </div>
+
+  <!-- Toast Feedback -->
+  <div class="toast" id="toast"></div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

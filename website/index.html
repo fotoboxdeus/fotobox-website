@@ -7,28 +7,23 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="screen" id="screen-start">
-    <div class="logo">📸</div>
-    <h1>FOTOBOX</h1>
-    <p class="subtitle">Berühren zum Starten</p>
-    <button class="btn-start" onclick="startSession()">START</button>
+
+  <!-- Video Layer -->
+  <div class="layer" id="layer-video">
+    <video id="bg-video" autoplay muted loop playsinline>
+      <source src="video/loop.mp4" type="video/mp4">
+    </video>
+    <!-- Fallback wenn noch kein Video vorhanden -->
+    <div class="video-fallback" id="video-fallback">
+      <div class="fallback-icon">📸</div>
+      <h1>FOTOBOX</h1>
+      <p>video/loop.mp4 ablegen</p>
+    </div>
   </div>
 
-  <div class="screen hidden" id="screen-countdown">
-    <div class="countdown" id="countdown">3</div>
-    <p>Bereit machen!</p>
-  </div>
-
-  <div class="screen hidden" id="screen-photo">
-    <div class="flash" id="flash"></div>
-    <p class="big-text">📷 CHEESE!</p>
-  </div>
-
-  <div class="screen hidden" id="screen-done">
-    <div class="logo">✅</div>
-    <h2>Danke!</h2>
-    <p>Dein Foto wird gedruckt.</p>
-    <button class="btn-start" onclick="reset()">Nochmal</button>
+  <!-- Galerie Layer -->
+  <div class="layer" id="layer-gallery">
+    <iframe id="gallery-frame" src="about:blank" frameborder="0" allowfullscreen></iframe>
   </div>
 
   <script src="app.js"></script>
